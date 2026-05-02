@@ -1,0 +1,11 @@
+{
+  "name": "notes",
+  "private": true,
+  "scripts": {
+    "pdf": "node scripts/md2pdf.mjs",
+    "pdf:watch": "node scripts/md2pdf.mjs --watch"
+  },
+  "devDependencies": {
+    "md-to-pdf": "^5.2.4"
+  }
+}

@@ -56,6 +56,12 @@ h4 {
   font-size: 1.05rem;
 }
 
+sup {
+  font-size: 0.72em;
+  vertical-align: super;
+  line-height: 0;
+}
+
 p {
   margin: 0.55em 0;
   orphans: 3;

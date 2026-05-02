@@ -31,6 +31,10 @@ npm run pdf -- ./lectures/week3.md
 npm run pdf:watch -- ./lectures/week3.md
 ```
 
+### PDF-only text transforms
+
+Before conversion, `scripts/md2pdf.mjs` adjusts prose (not fenced ``` code): English Greek letter names → Unicode (e.g. `sigma` / `Sigma` → σ / Σ), and caret exponents → superscript HTML (`x^2`, `x^n`, `x^*`, `x^+`, `x^{n+1}`, …). `[^…]` footnote markers and `\^` escapes are left alone.
+
 ### Styling the PDF
 
 Edit **`pdf-theme.css`** at the project root. The script always applies that stylesheet on top of the HTML that `md-to-pdf` generates from your Markdown.

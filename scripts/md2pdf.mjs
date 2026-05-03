@@ -12,7 +12,10 @@
  * intersection become ∪ / ∩. Skips [^…] (footnote-style) and \^ escapes.
  * Whole-word union, intersection, is a subset / member / element of, and
  * negated element phrases become ∪, ∩, ⊆, ∈, ∉.
- * Fenced ``` code blocks are left unchanged.
+ * A digit run immediately after a single letter (or Greek name + digits) becomes
+ * HTML subscript (x2 → x<sub>2</sub>, Sigma2 → Σ<sub>2</sub>), not when the
+ * letter continues a word (…step2 stays unchanged). Fenced ``` code blocks
+ * are left unchanged.
  *
  * Usage: node scripts/md2pdf.mjs <file.md> [more.md ...]
  *        node scripts/md2pdf.mjs --watch <file.md>
@@ -67,6 +70,22 @@ const greekWordPattern = new RegExp(
   `\\b(${GREEK_NAMES_LONGEST_FIRST.join("|")})\\b`,
   "giu",
 );
+
+/** English Greek name + digits → Greek + subscript (Sigma2 → Σ<sub>2</sub>). */
+const greekNameDigitPattern = new RegExp(
+  `(?<![\\p{L}0-9])\\b(${GREEK_NAMES_LONGEST_FIRST.join("|")})([0-9]+)(?![0-9])`,
+  "giu",
+);
+
+function replaceGreekNameWithSubscript(text) {
+  return text.replace(greekNameDigitPattern, (match, name, digits) => {
+    const pair = GREEK_BY_NAME[name.toLowerCase()];
+    if (!pair) return match;
+    const upperGreek = /\p{Lu}/u.test(name[0]);
+    const g = upperGreek ? pair[1] : pair[0];
+    return `${g}<sub>${digits}</sub>`;
+  });
+}
 
 function replaceGreekWords(text) {
   return text.replace(greekWordPattern, (word) => {
@@ -128,6 +147,17 @@ function normalizeSuperscriptTags(text) {
 const CARET_EXPONENT =
   /(?<![\[\\])\^(?:\{([^}]*)\}|([0-9]+)|(union|intersection)\b|([a-zA-Z])(?![a-zA-Z])|([*+≤≥≠=<>∪∩∧∨⊆⊇∈∉⊂⊃±×÷\-]))/giu;
 
+/**
+ * One letter + digits → subscript; letter must not continue a word (…step2
+ * unchanged). Uses Unicode letters so Σ2 works after Greek substitution.
+ */
+function replaceLetterDigitSubscript(text) {
+  return text.replace(
+    /(?<![\p{L}0-9])(\p{L})([0-9]+)(?![0-9])/gu,
+    (_, letter, digits) => `${letter}<sub>${digits}</sub>`,
+  );
+}
+
 function replaceCaretSuperscript(text) {
   return text.replace(
     CARET_EXPONENT,
@@ -151,12 +181,16 @@ function transformOutsideCodeFences(md, fn) {
   return parts.map((chunk, i) => (i % 2 === 1 ? chunk : fn(chunk))).join("```");
 }
 
-/** Greek, set operators, caret superscripts, <sup> cleanup; skips ``` ```. */
+/** Greek (+ name+digits), set ops, subscripts, carets, <sup> cleanup. */
 function preprocessMarkdownForPdf(md) {
   return transformOutsideCodeFences(md, (chunk) =>
     normalizeSuperscriptTags(
       replaceCaretSuperscript(
-        replaceSetOperatorWords(replaceGreekWords(chunk)),
+        replaceSetOperatorWords(
+          replaceLetterDigitSubscript(
+            replaceGreekWords(replaceGreekNameWithSubscript(chunk)),
+          ),
+        ),
       ),
     ),
   );

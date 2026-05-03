@@ -62,6 +62,12 @@ sup {
   line-height: 0;
 }
 
+sub {
+  font-size: 0.72em;
+  vertical-align: sub;
+  line-height: 0;
+}
+
 p {
   margin: 0.55em 0;
   orphans: 3;

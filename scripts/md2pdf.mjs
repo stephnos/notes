@@ -8,7 +8,10 @@
  *
  * Caret exponents become HTML superscript for the PDF: x^2, x^n, x^*,
  * x^{n+1}, etc. Single-symbol tails include * + relations and common math
- * Unicode; longer text uses ^{…}. Skips [^…] (footnote-style) and \^ escapes.
+ * Unicode; longer text uses ^{…}. Braced or word superscripts union /
+ * intersection become ∪ / ∩. Skips [^…] (footnote-style) and \^ escapes.
+ * Whole-word union, intersection, is a subset / member / element of, and
+ * negated element phrases become ∪, ∩, ⊆, ∈, ∉.
  * Fenced ``` code blocks are left unchanged.
  *
  * Usage: node scripts/md2pdf.mjs <file.md> [more.md ...]
@@ -74,18 +77,73 @@ function replaceGreekWords(text) {
   });
 }
 
+/** Longest first so negated and longer phrases win. */
+const SET_OPERATOR_PHRASES = [
+  ["is not an element of", "∉"],
+  ["is not a member of", "∉"],
+  ["is an element of", "∈"],
+  ["is a member of", "∈"],
+  ["is a subset of", "⊆"],
+  ["intersection", "∩"],
+  ["union", "∪"],
+];
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function replaceSetOperatorWords(text) {
+  let out = text;
+  for (const [phrase, symbol] of SET_OPERATOR_PHRASES) {
+    out = out.replace(new RegExp(escapeRegExp(phrase), "giu"), symbol);
+  }
+  return out;
+}
+
+function mapSuperscriptBody(raw) {
+  if (raw == null) return "";
+  const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === "union") return "∪";
+  if (lower === "intersection") return "∩";
+  return raw;
+}
+
+/**
+ * Normalizes <sup>union</sup> etc. after caret pass (e.g. x^{union}).
+ */
+function normalizeSuperscriptTags(text) {
+  return text.replace(/<sup>([^<]*)<\/sup>/giu, (full, inner) => {
+    const mapped = mapSuperscriptBody(inner);
+    if (mapped === inner) return full;
+    return `<sup>${mapped}</sup>`;
+  });
+}
+
 /**
  * Not after `[` (footnote [^n]) or `\` (escaped caret).
- * Braced, digits, single Latin letter, or one math/punctuation superscript char.
+ * Braced, digits, union/intersection words, single Latin letter, or one math
+ * superscript char (∪ ∩ * + …). `i` so ^Union matches.
  */
 const CARET_EXPONENT =
-  /(?<![\[\\])\^(?:\{([^}]*)\}|([0-9]+)|([a-zA-Z])(?![a-zA-Z])|([*+≤≥≠=<>∪∩∧∨⊆⊇∈∉⊂⊃±×÷\-]))/gu;
+  /(?<![\[\\])\^(?:\{([^}]*)\}|([0-9]+)|(union|intersection)\b|([a-zA-Z])(?![a-zA-Z])|([*+≤≥≠=<>∪∩∧∨⊆⊇∈∉⊂⊃±×÷\-]))/giu;
 
 function replaceCaretSuperscript(text) {
-  return text.replace(CARET_EXPONENT, (_, braced, digits, letter, sym) => {
-    const inner = braced ?? digits ?? letter ?? sym ?? "";
-    return `<sup>${inner}</sup>`;
-  });
+  return text.replace(
+    CARET_EXPONENT,
+    (_, braced, digits, wordOp, letter, sym) => {
+      if (wordOp) {
+        const inner = mapSuperscriptBody(wordOp);
+        return `<sup>${inner}</sup>`;
+      }
+      const rawInner = braced ?? digits ?? letter ?? sym ?? "";
+      const inner =
+        braced !== undefined && braced !== null
+          ? mapSuperscriptBody(rawInner)
+          : rawInner;
+      return `<sup>${inner}</sup>`;
+    },
+  );
 }
 
 function transformOutsideCodeFences(md, fn) {
@@ -93,10 +151,14 @@ function transformOutsideCodeFences(md, fn) {
   return parts.map((chunk, i) => (i % 2 === 1 ? chunk : fn(chunk))).join("```");
 }
 
-/** Greek words + caret superscripts; skips ``` code ``` bodies. */
+/** Greek, set operators, caret superscripts, <sup> cleanup; skips ``` ```. */
 function preprocessMarkdownForPdf(md) {
   return transformOutsideCodeFences(md, (chunk) =>
-    replaceCaretSuperscript(replaceGreekWords(chunk)),
+    normalizeSuperscriptTags(
+      replaceCaretSuperscript(
+        replaceSetOperatorWords(replaceGreekWords(chunk)),
+      ),
+    ),
   );
 }
 

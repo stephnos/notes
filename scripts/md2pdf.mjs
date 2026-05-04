@@ -10,6 +10,8 @@
  * x^{n+1}, etc. Single-symbol tails include * + relations and common math
  * Unicode; longer text uses ^{…}. Braced or word superscripts union /
  * intersection become ∪ / ∩. Skips [^…] (footnote-style) and \^ escapes.
+ * `*` / `_` inside generated <sup> are escaped for Marked so two Kleene stars
+ * on one line are not parsed as emphasis across tags.
  * Whole-word union, intersection, is a subset / member / element of, and
  * negated element phrases become ∪, ∩, ⊆, ∈, ∉.
  * A digit run immediately after a single letter (or Greek name + digits) becomes
@@ -26,7 +28,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mdToPdf } from "md-to-pdf";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const root = join(__dirname, "..");
 const stylesheet = join(root, "pdf-theme.css");
 
@@ -140,6 +143,19 @@ function normalizeSuperscriptTags(text) {
 }
 
 /**
+ * Marked v4 pairs `*` / `_` for emphasis even inside raw HTML; two
+ * `<sup>*</sup>` on one line becomes broken `<em>` across tags. Entities are
+ * safe and render the same in the PDF.
+ */
+function escapeMarkedDelimsInsideSupTags(text) {
+  return text.replace(/<sup>([^<]*)<\/sup>/giu, (full, inner) => {
+    if (!/[*_]/.test(inner)) return full;
+    const escaped = inner.replace(/\*/g, "&#42;").replace(/_/g, "&#95;");
+    return `<sup>${escaped}</sup>`;
+  });
+}
+
+/**
  * Not after `[` (footnote [^n]) or `\` (escaped caret).
  * Braced, digits, union/intersection words, single Latin letter, or one math
  * superscript char (∪ ∩ * + …). `i` so ^Union matches.
@@ -182,13 +198,15 @@ function transformOutsideCodeFences(md, fn) {
 }
 
 /** Greek (+ name+digits), set ops, subscripts, carets, <sup> cleanup. */
-function preprocessMarkdownForPdf(md) {
+export function preprocessMarkdownForPdf(md) {
   return transformOutsideCodeFences(md, (chunk) =>
-    normalizeSuperscriptTags(
-      replaceCaretSuperscript(
-        replaceSetOperatorWords(
-          replaceLetterDigitSubscript(
-            replaceGreekWords(replaceGreekNameWithSubscript(chunk)),
+    escapeMarkedDelimsInsideSupTags(
+      normalizeSuperscriptTags(
+        replaceCaretSuperscript(
+          replaceSetOperatorWords(
+            replaceLetterDigitSubscript(
+              replaceGreekWords(replaceGreekNameWithSubscript(chunk)),
+            ),
           ),
         ),
       ),
@@ -264,7 +282,12 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const invokedAsCli =
+  process.argv[1] && resolve(process.argv[1]) === resolve(__filename);
+
+if (invokedAsCli) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

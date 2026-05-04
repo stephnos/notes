@@ -56,16 +56,18 @@ h4 {
   font-size: 1.05rem;
 }
 
+/* Non-zero line-height: print/PDF often clips superscripts at line or page
+   edges when line-height is 0 (Chromium). */
 sup {
   font-size: 0.72em;
   vertical-align: super;
-  line-height: 0;
+  line-height: 1.25;
 }
 
 sub {
   font-size: 0.72em;
   vertical-align: sub;
-  line-height: 0;
+  line-height: 1.25;
 }
 
 p {
@@ -135,6 +137,9 @@ ol {
 
 li {
   margin: 0.25em 0;
+  /* Keeps bullets (and inline <sup>) from splitting across pages in a way
+     that clips ascenders in Chromium PDF. */
+  page-break-inside: avoid;
 }
 
 table {
